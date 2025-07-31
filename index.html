@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ISO27001 刷題神器</title>
+    <style>
+        body { font-family: "Segoe UI", Arial, sans-serif; background: #f7f8fa; }
+        .main { max-width: 900px; margin: 30px auto; background: #fff; border-radius: 12px; box-shadow: 0 8px 32px #0001; padding: 32px; }
+        .title { font-size: 2em; color: #4f57ef; margin-bottom: 18px; }
+        .situation-group { background: #eef3fa; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; }
+        .situation-title { font-weight: bold; color: #3850b7; margin-bottom: 5px; }
+        .quiz-list { margin-top: 24px; }
+        .question-block { background: #f4f6fb; border-radius: 8px; margin-bottom: 24px; padding: 20px 20px 10px 20px; border-left: 6px solid #3850b7; }
+        .question-text { font-size: 1.08em; margin-bottom: 10px; }
+        .options { 
+            display: flex; 
+            flex-direction: column; /* 由上到下排列 */
+            gap: 15px; 
+            margin-bottom: 10px; 
+        }
+        .option { background: #fff; border: 1.5px solid #bbb; border-radius: 22px; padding: 7px 20px; cursor: pointer; font-size: 1em; margin-bottom: 5px; transition: .2s; }
+        .option.selected { background: #5076fa; color: #fff; border-color: #30479e; }
+        .option.correct { background: #2fb75e; color: #fff; border-color: #189149; }
+        .option.incorrect { background: #ff5454; color: #fff; border-color: #d43232; }
+        .answer-section { margin-top: 7px; }
+        .explanation { background: #e9f5f8; border-left: 5px solid #50b4f9; padding: 14px 18px; border-radius: 7px; color: #23485e; margin-top: 6px; }
+        .btn { background: linear-gradient(90deg, #4561ea, #68d6f9); color: #fff; border: none; border-radius: 24px; padding: 10px 36px; font-size: 1.1em; cursor: pointer; margin-top: 16px; transition: .2s; }
+        .btn[disabled] { background: #bbb; color: #fff; cursor: not-allowed; }
+        .batch-nav { margin: 30px 0 16px 0; text-align: center; }
+        .batch-btn { margin: 0 10px; padding: 7px 22px; font-size: 1em; border-radius: 18px; border: none; cursor: pointer; background: #dbe6fd; color: #3850b7; transition: .2s; }
+        .batch-btn.active { background: #4561ea; color: #fff; }
+        .progress { color: #555; margin: 13px 0 8px 0; font-size: .99em; }
+        .situation-list { margin: 18px 0; }
+        .situation-link { color: #0077cc; cursor: pointer; text-decoration: underline; margin-right: 10px; }
+        .situation-link.active { color: #3850b7; font-weight: bold; text-decoration: none; }
+        @media (max-width: 700px) {
+            .main { padding: 10px; }
+            .option { padding: 7px 10px; font-size: .99em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="main">
+        <div class="title">ISO27001 刷題神器（純前端）</div>
+        <div id="situation-list" class="situation-list"></div>
+        <div id="quiz-list" class="quiz-list"></div>
+        <button class="btn" id="next-btn" onclick="nextQuestion()" disabled>下一題</button>
+        <div id="progress" class="progress"></div>
+        <div id="question-range-nav" style="text-align:center;margin-top:16px;"></div>
+    </div>
+    <input type="file" id="fileInput" accept=".json" style="display:none;">
+    <script>
+    // 1. 資料載入
+    let QUESTIONS = [];
+    let currentQuestions = [];
+    let currentQuestionIndex = 0;
+    let selectedSituation = null; // null=全部，否則顯示某個情境下所有題
+    let userAnswers = {};
+    let showAnswer = false;
+    let situations = [];
+
+    function loadQuestions(callback) {
+        fetch('ISO27001_Questions_All.json')
+            .then(res => res.json())
+            .then(data => {
+                QUESTIONS = data;
+                callback();
+            })
+            .catch(() => {
+                document.getElementById('quiz-list').innerHTML = '<div style="color:#d33;">找不到題庫，請手動上傳 <input type="file" id="fileInput2" accept=".json"></div>';
+                document.getElementById('fileInput2').onchange = function(e) {
+                    let reader = new FileReader();
+                    reader.onload = function(evt) {
+                        QUESTIONS = JSON.parse(evt.target.result);
+                        callback();
+                    };
+                    reader.readAsText(e.target.files[0]);
+                }
+            });
+    }
+
+    function groupQuestions() {
+        situations = [...new Set(QUESTIONS.map(q => q.situation || "未分類"))];
+        if (selectedSituation && selectedSituation !== "全部") {
+            currentQuestions = QUESTIONS.filter(q => q.situation === selectedSituation);
+        } else {
+            currentQuestions = QUESTIONS;
+        }
+    }
+
+    function renderSituationList() {
+        let html = `<span class="situation-link ${selectedSituation === null || selectedSituation === "全部" ? "active" : ""}" onclick="selectSituation('全部')">全部題目</span>`;
+        for (let sit of situations) {
+            if (!sit || sit === "全部") continue;
+            html += `<span class="situation-link ${sit === selectedSituation ? "active" : ""}" onclick="selectSituation('${sit.replace(/'/g, "\\'")}')">${sit}</span>`;
+        }
+        document.getElementById('situation-list').innerHTML = html;
+    }
+
+    // 在 renderSituationList 之後呼叫
+    function renderQuestionRangeNav() {
+        let total = currentQuestions.length;
+        if (total === 0) {
+            document.getElementById('question-range-nav').innerHTML = "";
+            return;
+        }
+        let html = '';
+        let groupSize = 10; // 每10題一個按鈕
+        let groupCount = Math.ceil(total / groupSize);
+        for (let i = 0; i < groupCount; i++) {
+            let start = i * groupSize + 1;
+            let end = Math.min((i + 1) * groupSize, total);
+            let active = (currentQuestionIndex + 1 >= start && currentQuestionIndex + 1 <= end) ? 'style="font-weight:bold;background:#4561ea;color:#fff;"' : '';
+            html += `<button class="btn" style="margin:0 6px 10px 0;padding:6px 18px;font-size:.98em;" ${active} onclick="jumpToQuestion(${start - 1})">${start}-${end}題</button>`;
+        }
+        document.getElementById('question-range-nav').innerHTML = html;
+    }
+
+    function jumpToQuestion(idx) {
+        currentQuestionIndex = idx;
+        showAnswer = false;
+        renderQuiz();
+        renderQuestionRangeNav();
+    }
+
+    function selectSituation(sit) {
+        selectedSituation = sit === "全部" ? null : sit;
+        currentQuestionIndex = 0;
+        userAnswers = {};
+        showAnswer = false;
+        groupQuestions();
+        renderSituationList();
+        renderQuestionRangeNav();
+        renderQuiz();
+        saveProgress();
+    }
+
+    function renderQuiz() {
+        let quizHtml = "";
+        if (currentQuestions.length === 0) {
+            quizHtml = `<div style="color:#d33;">本情境沒有題目</div>`;
+            document.getElementById('quiz-list').innerHTML = quizHtml;
+            document.getElementById('next-btn').disabled = true;
+            document.getElementById('progress').innerText = "";
+            return;
+        }
+        let q = currentQuestions[currentQuestionIndex];
+        let ans = userAnswers[q.id] || (q.type === 'multiple' ? [] : "");
+        let answered = q.type === 'single' ? ans !== "" : ans.length > 0;
+        quizHtml += `<div class="question-block" id="q${q.id}">
+            <div class="question-text"><b>Q${currentQuestionIndex+1}.</b> <span>${q.question}</span>
+                <span style="color:#3850b7;font-size:.97em;margin-left:15px;">[${q.situation}]</span>
+            </div>
+            <div class="options">`;
+        for (let op of q.options) {
+            let selected = q.type === 'single'
+                ? ans === op.label
+                : ans.includes(op.label);
+            let answerMode = showAnswer;
+            let classList = "option";
+            if (selected) classList += " selected";
+            if (answerMode) {
+                if ((q.type === 'single' && op.label === q.answer) || (q.type === 'multiple' && q.answer.includes(op.label))) classList += " correct";
+                else if (selected && (!((q.type === 'single' && op.label === q.answer) || (q.type === 'multiple' && q.answer.includes(op.label))))) classList += " incorrect";
+            }
+            quizHtml += `<div class="${classList}" onclick="selectOption(${q.id},'${op.label}','${q.type}')">
+                ${op.label}. ${op.text}
+            </div>`;
+        }
+        quizHtml += `</div>`;
+        if (showAnswer) {
+            let userShow = (q.type === 'single' ? ans : ans.join('、')) || '（未作答）';
+            let correctShow = q.type === 'single' ? q.answer : q.answer.join('、');
+            quizHtml += `<div class="answer-section">
+                <b>你的答案：</b> <span style="color:#2988b3;">${userShow}</span><br>
+                <b>正確答案：</b> <span style="color:#2fb75e;">${correctShow}</span>
+                <div class="explanation">
+                    <b>解析：</b> ${q.explanation || "暫無解析"}
+                </div>
+            </div>`;
+        }
+        quizHtml += `</div>`;
+        document.getElementById('quiz-list').innerHTML = quizHtml;
+        document.getElementById('progress').innerText = `第 ${currentQuestionIndex+1} / ${currentQuestions.length} 題`;
+        renderQuestionRangeNav(); // 每次題目切換時也更新按鈕狀態
+        // 下一題按鈕控制
+        document.getElementById('next-btn').disabled = !(answered && showAnswer);
+        if (currentQuestionIndex === currentQuestions.length - 1) {
+            document.getElementById('next-btn').innerText = "完成";
+        } else {
+            document.getElementById('next-btn').innerText = "下一題";
+        }
+    }
+
+    // 儲存紀錄到 localStorage
+    function saveProgress() {
+        const data = {
+            userAnswers,
+            currentQuestionIndex,
+            selectedSituation
+        };
+        localStorage.setItem('iso27001_quiz_progress', JSON.stringify(data));
+    }
+
+    // 從 localStorage 載入紀錄
+    function loadProgress() {
+        const data = localStorage.getItem('iso27001_quiz_progress');
+        if (data) {
+            try {
+                const obj = JSON.parse(data);
+                userAnswers = obj.userAnswers || {};
+                currentQuestionIndex = obj.currentQuestionIndex || 0;
+                selectedSituation = obj.selectedSituation || null;
+            } catch (e) {
+                // 若解析失敗則忽略
+            }
+        }
+    }
+
+    function selectOption(qid, label, type) {
+        if (showAnswer) return;
+        let q = currentQuestions[currentQuestionIndex];
+        if (type === 'single') {
+            userAnswers[qid] = label;
+            showAnswer = true;
+        } else {
+            if (!Array.isArray(userAnswers[qid])) userAnswers[qid] = [];
+            let idx = userAnswers[qid].indexOf(label);
+            if (idx === -1) userAnswers[qid].push(label);
+            else userAnswers[qid].splice(idx, 1);
+            if (userAnswers[qid].length === q.answer.length) {
+                showAnswer = true;
+            }
+        }
+        saveProgress();
+        renderQuiz();
+    }
+
+    function nextQuestion() {
+        if (currentQuestionIndex < currentQuestions.length - 1) {
+            currentQuestionIndex++;
+            showAnswer = false;
+            saveProgress();
+            renderQuiz();
+        } else {
+            alert("已完成所有題目！");
+        }
+    }
+
+    // 啟動
+    loadQuestions(function() {
+        loadProgress();
+        groupQuestions();
+        renderSituationList();
+        renderQuestionRangeNav();
+        renderQuiz();
+    });
+    </script>
+</body>
+</html>
