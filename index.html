@@ -148,44 +148,59 @@
         let q = currentQuestions[currentQuestionIndex];
         let ans = userAnswers[q.id] || (q.type === 'multiple' ? [] : "");
         let answered = q.type === 'single' ? ans !== "" : ans.length > 0;
-        quizHtml += `<div class="question-block" id="q${q.id}">
-            <div class="question-text"><b>Q${currentQuestionIndex+1}.</b> <span>${q.question}</span>
-                <span style="color:#3850b7;font-size:.97em;margin-left:15px;">[${q.situation}]</span>
-            </div>
-            <div class="options">`;
-        for (let op of q.options) {
-            let selected = q.type === 'single'
-                ? ans === op.label
-                : ans.includes(op.label);
-            let answerMode = showAnswer;
-            let classList = "option";
-            if (selected) classList += " selected";
-            if (answerMode) {
-                if ((q.type === 'single' && op.label === q.answer) || (q.type === 'multiple' && q.answer.includes(op.label))) classList += " correct";
-                else if (selected && (!((q.type === 'single' && op.label === q.answer) || (q.type === 'multiple' && q.answer.includes(op.label))))) classList += " incorrect";
-            }
-            quizHtml += `<div class="${classList}" onclick="selectOption(${q.id},'${op.label}','${q.type}')">
-                ${op.label}. ${op.text}
+
+        // 判斷題目是否無內容或無選項
+        let noQuestionInfo = (!q.question || q.question.trim() === "") || !q.options || q.options.length === 0;
+
+        if (noQuestionInfo) {
+            quizHtml += `<div class="question-block" id="q${q.id}">
+                <div class="question-text" style="color:#d33;">本題無題目資訊，請直接前往下一題。</div>
             </div>`;
-        }
-        quizHtml += `</div>`;
-        if (showAnswer) {
-            let userShow = (q.type === 'single' ? ans : ans.join('、')) || '（未作答）';
-            let correctShow = q.type === 'single' ? q.answer : q.answer.join('、');
-            quizHtml += `<div class="answer-section">
-                <b>你的答案：</b> <span style="color:#2988b3;">${userShow}</span><br>
-                <b>正確答案：</b> <span style="color:#2fb75e;">${correctShow}</span>
-                <div class="explanation">
-                    <b>解析：</b> ${q.explanation || "暫無解析"}
+        } else {
+            quizHtml += `<div class="question-block" id="q${q.id}">
+                <div class="question-text"><b>Q${currentQuestionIndex+1}.</b> <span>${q.question}</span>
+                    <span style="color:#3850b7;font-size:.97em;margin-left:15px;">[${q.situation}]</span>
                 </div>
-            </div>`;
+                <div class="options">`;
+            for (let op of q.options) {
+                let selected = q.type === 'single'
+                    ? ans === op.label
+                    : ans.includes(op.label);
+                let answerMode = showAnswer;
+                let classList = "option";
+                if (selected) classList += " selected";
+                if (answerMode) {
+                    if ((q.type === 'single' && op.label === q.answer) || (q.type === 'multiple' && q.answer.includes(op.label))) classList += " correct";
+                    else if (selected && (!((q.type === 'single' && op.label === q.answer) || (q.type === 'multiple' && q.answer.includes(op.label))))) classList += " incorrect";
+                }
+                quizHtml += `<div class="${classList}" onclick="selectOption(${q.id},'${op.label}','${q.type}')">
+                    ${op.label}. ${op.text}
+                </div>`;
+            }
+            quizHtml += `</div>`;
+            if (showAnswer) {
+                let userShow = (q.type === 'single' ? ans : ans.join('、')) || '（未作答）';
+                let correctShow = q.type === 'single' ? q.answer : q.answer.join('、');
+                quizHtml += `<div class="answer-section">
+                    <b>你的答案：</b> <span style="color:#2988b3;">${userShow}</span><br>
+                    <b>正確答案：</b> <span style="color:#2fb75e;">${correctShow}</span>
+                    <div class="explanation">
+                        <b>解析：</b> ${q.explanation || "暫無解析"}
+                    </div>
+                </div>`;
+            }
         }
         quizHtml += `</div>`;
         document.getElementById('quiz-list').innerHTML = quizHtml;
         document.getElementById('progress').innerText = `第 ${currentQuestionIndex+1} / ${currentQuestions.length} 題`;
         renderQuestionRangeNav(); // 每次題目切換時也更新按鈕狀態
-        // 下一題按鈕控制
-        document.getElementById('next-btn').disabled = !(answered && showAnswer);
+
+        // 下一題按鈕控制：如果沒題目資訊則啟用，否則維持原本邏輯
+        if (noQuestionInfo) {
+            document.getElementById('next-btn').disabled = false;
+        } else {
+            document.getElementById('next-btn').disabled = !(answered && showAnswer);
+        }
         if (currentQuestionIndex === currentQuestions.length - 1) {
             document.getElementById('next-btn').innerText = "完成";
         } else {
