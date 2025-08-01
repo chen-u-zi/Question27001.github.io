@@ -8,6 +8,13 @@
     <style>
         body { font-family: "Segoe UI", Arial, sans-serif; background: #f7f8fa; }
         .main { max-width: 900px; margin: 30px auto; background: #fff; border-radius: 12px; box-shadow: 0 8px 32px #0001; padding: 32px; }
+        #site-password {
+            font-size: 1.1em;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #bbb;
+            width: 180px;
+        }
         .title { font-size: 2em; color: #4f57ef; margin-bottom: 18px; }
         .situation-group { background: #eef3fa; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; }
         .situation-title { font-weight: bold; color: #3850b7; margin-bottom: 5px; }
@@ -42,7 +49,15 @@
     </style>
 </head>
 <body>
-    <div class="main">
+    <div id="password-modal" style="position:fixed;top:0;left:0;width:100vw;height:100vh;background:#fff;z-index:9999;display:flex;align-items:center;justify-content:center;">
+        <div style="background:#f4f6fb;padding:32px 28px;border-radius:12px;box-shadow:0 4px 24px #0002;">
+            <div style="font-size:1.2em;margin-bottom:16px;">請輸入密碼才能進入本網站</div>
+            <input type="password" id="site-password" style="font-size:1.1em;padding:8px 16px;border-radius:6px;border:1px solid #bbb;width:180px;">
+            <button onclick="checkPassword()" style="margin-left:12px;padding:8px 24px;border-radius:6px;background:#4561ea;color:#fff;border:none;font-size:1em;cursor:pointer;">進入</button>
+            <div id="pw-error" style="color:#d33;margin-top:12px;display:none;">密碼錯誤，請再試一次。</div>
+        </div>
+    </div>
+    <div class="main" style="display:none;">
         <div class="title">ISO27001 刷題神器（純前端）</div>
         <div id="situation-list" class="situation-list"></div>
         <div id="quiz-list" class="quiz-list"></div>
@@ -99,7 +114,6 @@
         document.getElementById('situation-list').innerHTML = html;
     }
 
-    // 在 renderSituationList 之後呼叫
     function renderQuestionRangeNav() {
         let total = currentQuestions.length;
         if (total === 0) {
@@ -123,6 +137,7 @@
         showAnswer = false;
         renderQuiz();
         renderQuestionRangeNav();
+        saveProgress();
     }
 
     function selectSituation(sit) {
@@ -159,7 +174,7 @@
             </div>`;
         } else {
             quizHtml += `<div class="question-block" id="q${q.id}">
-                <div class="question-text"><b>Q${currentQuestionIndex+1}.</b> <span>${q.question}</span>
+                <div class="question-text"><b>Q${currentQuestionIndex+1}.</b> ${q.question}
                     <span style="color:#3850b7;font-size:.97em;margin-left:15px;">[${q.situation}]</span>
                 </div>
                 <div class="options">`;
@@ -194,7 +209,7 @@
         quizHtml += `</div>`;
         document.getElementById('quiz-list').innerHTML = quizHtml;
         document.getElementById('progress').innerText = `第 ${currentQuestionIndex+1} / ${currentQuestions.length} 題`;
-        renderQuestionRangeNav(); // 每次題目切換時也更新按鈕狀態
+        renderQuestionRangeNav();
 
         // 下一題按鈕控制：如果沒題目資訊則啟用，否則維持原本邏輯
         if (noQuestionInfo) {
@@ -262,6 +277,24 @@
         } else {
             alert("已完成所有題目！");
         }
+    }
+
+    function checkPassword() {
+        const input = document.getElementById('site-password').value;
+        if (input === 'sg1234') {
+            document.getElementById('password-modal').style.display = 'none';
+            document.querySelector('.main').style.display = '';
+        } else {
+            document.getElementById('pw-error').style.display = 'block';
+        }
+    }
+    // 頁面載入時隱藏主內容
+    window.onload = function() {
+        document.querySelector('.main').style.display = 'none';
+        document.getElementById('password-modal').style.display = 'flex';
+        document.getElementById('site-password').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') checkPassword();
+        });
     }
 
     // 啟動
